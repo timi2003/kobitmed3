@@ -1,167 +1,164 @@
+// app/api/fitbit/sync/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 
-async function refreshFitbitToken(
-  clientId: string,
-  clientSecret: string,
-  refreshToken: string
-) {
-  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
+async function refreshGoogleToken(refreshToken: string) {
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_HEALTH_CLIENT_ID!
+  const clientSecret = process.env.GOOGLE_HEALTH_CLIENT_SECRET!
 
-  const response = await fetch('https://api.fitbit.com/oauth2/token', {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
       refresh_token: refreshToken,
-    }).toString(),
+      grant_type: 'refresh_token',
+    }),
   })
 
-  if (!response.ok) {
-    throw new Error('Failed to refresh Fitbit token')
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Refresh failed: ${err}`)
   }
-
-  return response.json()
+  return res.json()
 }
 
-async function fetchFitbitData(
-  accessToken: string,
-  fitbitUserId: string,
-  dataType: 'heart' | 'steps' | 'sleep' | 'activities',
+async function fetchDailyData(accessToken: string, dataType: string, date: string) {
+  try {
+    const res = await fetch(
+      `https://health.googleapis.com/v4/users/me/dataTypes/${dataType}/dataPoints:dailyRollUp`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          range: { start: { date }, end: { date } }, 
+          windowSize: '1d' 
+        }),
+      }
+    )
+    if (!res.ok) return null
+    return res.json()
+  } catch {
+    return null
+  }
+}
+
+// ==================== KEY FIX: Reusable Sync Function ====================
+async function syncHealthData(
+  supabaseAdmin: any, 
+  userId: string, 
+  accessToken: string, 
   date: string
 ) {
-  const endpoints: { [key: string]: string } = {
-    heart: `/1/user/${fitbitUserId}/activities/heart/date/${date}.json`,
-    steps: `/1/user/${fitbitUserId}/activities/steps/date/${date}.json`,
-    sleep: `/1/user/${fitbitUserId}/sleep/date/${date}.json`,
-    activities: `/1/user/${fitbitUserId}/activities/date/${date}.json`,
-  }
-
-  const response = await fetch(`https://api.fitbit.com${endpoints[dataType]}`, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch Fitbit ${dataType} data`)
-  }
-
-  return response.json()
-}
-
-export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { userId, date } = body
-
-    if (!userId || !date) {
-      return NextResponse.json(
-        { error: 'Missing userId or date' },
-        { status: 400 }
-      )
-    }
-
-    const client = await createClient()
-
-    // Get Fitbit credentials
-    const { data: credentials, error: credError } = await client
-      .from('fitbit_credentials')
-      .select()
-      .eq('user_id', userId)
-      .single()
-
-    if (credError || !credentials) {
-      return NextResponse.json(
-        { error: 'Fitbit credentials not found' },
-        { status: 404 }
-      )
-    }
-
-    let accessToken = credentials.access_token
-
-    // Check if token is expired and refresh if needed
-    if (new Date(credentials.expires_at) < new Date()) {
-      const clientId = process.env.FITBIT_CLIENT_ID || '23VC24'
-      const clientSecret = process.env.FITBIT_CLIENT_SECRET || '4497a4c10b48fa9c2fa7331cb76a651f'
-
-      try {
-        const newTokens = await refreshFitbitToken(
-          clientId,
-          clientSecret,
-          credentials.refresh_token
-        )
-
-        // Update credentials
-        const expiresAt = new Date(Date.now() + newTokens.expires_in * 1000)
-
-        await client
-          .from('fitbit_credentials')
-          .update({
-            access_token: newTokens.access_token,
-            refresh_token: newTokens.refresh_token,
-            expires_at: expiresAt.toISOString(),
-          })
-          .eq('user_id', userId)
-
-        accessToken = newTokens.access_token
-      } catch (error) {
-        return NextResponse.json(
-          { error: 'Failed to refresh Fitbit token' },
-          { status: 401 }
-        )
-      }
-    }
-
-    // Fetch data from Fitbit
-    const [heartData, stepsData, sleepData, activitiesData] = await Promise.all([
-      fetchFitbitData(accessToken, credentials.fitbit_user_id, 'heart', date),
-      fetchFitbitData(accessToken, credentials.fitbit_user_id, 'steps', date),
-      fetchFitbitData(accessToken, credentials.fitbit_user_id, 'sleep', date),
-      fetchFitbitData(accessToken, credentials.fitbit_user_id, 'activities', date),
+    const [stepsData, heartData, sleepData] = await Promise.all([
+      fetchDailyData(accessToken, 'steps', date),
+      fetchDailyData(accessToken, 'heart-rate', date),
+      fetchDailyData(accessToken, 'sleep', date),
     ])
 
-    // Parse and store health data
     const healthData = {
       user_id: userId,
       date,
-      heart_rate: heartData['activities-heart']?.[0]?.value?.restingHeartRate || null,
-      steps: stepsData['activities-steps']?.[0]?.value || null,
-      sleep_duration: sleepData.sleep?.[0]?.duration
-        ? (sleepData.sleep[0].duration / 60000) // Convert milliseconds to hours
+      steps: stepsData?.dailyRollup?.steps?.value ?? null,
+      heart_rate: heartData?.dailyRollup?.restingHeartRate?.value ?? null,
+      sleep_duration: sleepData?.dailyRollup?.sleep?.durationMinutes 
+        ? Math.round((sleepData.dailyRollup.sleep.durationMinutes / 60) * 10) / 10 
         : null,
-      sleep_quality: sleepData.sleep?.[0]?.efficiency || null,
-      calories_burned: activitiesData['activities-calories']?.[0]?.value || null,
-      distance: activitiesData['activities-distance']?.[0]?.value || null,
-      active_minutes: activitiesData['activities-activeMinutes']?.[0]?.value || null,
-      source: 'fitbit' as const,
+      sleep_quality: sleepData?.dailyRollup?.sleep?.efficiency ?? null,
+      source: 'google_health',
+      updated_at: new Date().toISOString(),
     }
 
-    // Upsert health data
-    const { error: dataError } = await client
+    const { error } = await supabaseAdmin
       .from('health_data')
-      .upsert(healthData)
+      .upsert(healthData, { onConflict: 'user_id,date' })
 
-    if (dataError) {
-      console.error('Error storing health data:', dataError)
-      return NextResponse.json(
-        { error: 'Failed to store health data' },
-        { status: 500 }
-      )
+    if (error) {
+      console.error('Health data upsert error:', error)
+      return false
+    }
+    return true
+  } catch (err: any) {
+    console.error('SyncHealthData Error:', err)
+    return false
+  }
+}
+
+// ===================== MAIN POST HANDLER =====================
+export async function POST(request: NextRequest) {
+  try {
+    const { userId, date } = await request.json()
+
+    if (!userId || !date) {
+      return NextResponse.json({ error: 'Missing parameters' }, { status: 400 })
     }
 
-    return NextResponse.json(
-      { data: healthData, message: 'Health data synced successfully' },
-      { status: 200 }
+    const supabaseAdmin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
-  } catch (error) {
-    console.error('Fitbit sync error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    )
+
+    // Get stored credentials
+    const { data: cred, error: credError } = await supabaseAdmin
+      .from('google_health_credentials')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    if (credError || !cred) {
+      return NextResponse.json({ error: 'Credentials not found' }, { status: 404 })
+    }
+
+    let accessToken = cred.access_token
+
+    // ================= TOKEN REFRESH (Fixed & Logged) =================
+    if (new Date(cred.expires_at) < new Date()) {
+      if (!cred.refresh_token) {
+        return NextResponse.json({ 
+          error: 'Token expired. Please reconnect.' 
+        }, { status: 401 })
+      }
+
+      console.log(`🔄 Refreshing token for user: ${userId}`)
+
+      const newTokens = await refreshGoogleToken(cred.refresh_token)
+      const expiresAt = new Date(Date.now() + (newTokens.expires_in || 3600) * 1000)
+
+      const { error: updateError } = await supabaseAdmin
+        .from('google_health_credentials')
+        .update({
+          access_token: newTokens.access_token,
+          refresh_token: newTokens.refresh_token || cred.refresh_token,
+          expires_at: expiresAt.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+
+      if (updateError) {
+        console.error('Token update error:', updateError)
+      } else {
+        accessToken = newTokens.access_token
+        console.log('✅ Token refreshed and saved successfully')
+      }
+    }
+
+    // ================= SYNC DATA TO DATABASE =================
+    const success = await syncHealthData(supabaseAdmin, userId, accessToken, date)
+
+    return NextResponse.json({ 
+      success, 
+      message: success ? 'Health data synced successfully' : 'Sync completed with issues'
+    })
+
+  } catch (error: any) {
+    console.error('Full Sync Error:', error)
+    return NextResponse.json({ 
+      error: error.message || 'Server error' 
+    }, { status: 500 })
   }
 }

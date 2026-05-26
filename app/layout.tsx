@@ -7,6 +7,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  
   title: 'Telemedicine Platform - Connect with Healthcare Professionals',
   description: 'A comprehensive telemedicine platform connecting patients with healthcare providers. View your health metrics from wearable devices, book appointments, and manage medical records securely.',
   generator: 'v0.app',
