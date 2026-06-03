@@ -8,6 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
+// Force dynamic rendering to fix prerender error
+export const dynamic = 'force-dynamic'
+
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
