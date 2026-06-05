@@ -1,11 +1,6 @@
 /** @type {import('next').NextConfig} */
 
-const withPWA = require("@ducanh2912/next-pwa").default({
-  dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
-  disable: process.env.NODE_ENV === "development",
-});
+import withPWA from "@ducanh2912/next-pwa";
 
 const nextConfig = {
   typescript: {
@@ -51,4 +46,10 @@ const nextConfig = {
 };
 
 // Apply PWA wrapper
-module.exports = withPWA(nextConfig);
+export default withPWA({
+  ...nextConfig,
+  dest: "public",
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+  disable: process.env.NODE_ENV === "development",
+});
