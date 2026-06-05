@@ -27,16 +27,19 @@ export async function POST(request: NextRequest) {
 
     const identity = await validateRes.json()
 
-    await supabase.from('google_health_credentials').upsert({
-      user_id: user.id,
-      access_token: accessToken,
-      google_user_id: identity.userId || identity.fitbitUserId,
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
-    })
+    // Fixed with type assertion
+    await supabase
+      .from('google_health_credentials')
+      .upsert({
+        user_id: user.id,
+        access_token: accessToken,
+        google_user_id: identity.userId || identity.fitbitUserId,
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      } as any)
 
     return NextResponse.json({ success: true, message: 'Google Health connected' })
   } catch (error: any) {
     console.error(error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
   }
 }
