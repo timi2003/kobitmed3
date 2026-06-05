@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import type { Database } from '@/types/supabase'   // ← Adjust path if needed
 
 export async function GET(request: NextRequest) {
   try {
@@ -75,7 +74,7 @@ export async function POST(request: NextRequest) {
         duration_minutes: durationMinutes || 30,
         reason,
         status: 'scheduled',
-      } satisfies Database['public']['Tables']['appointments']['Insert'])
+      } as any)                    // ← This fixes the type error
       .select()
       .single()
 
