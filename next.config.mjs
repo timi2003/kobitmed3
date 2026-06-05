@@ -10,8 +10,11 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  // Fix Turbopack warning + Worker Error
-  turbopack: {},
+  // Force Webpack (PWA plugin is not stable with Turbopack)
+  experimental: {
+    turbopack: false,
+  },
+  turbopack: {}, // still needed to silence warning
 
   async headers() {
     return [
