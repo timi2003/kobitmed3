@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format } from 'date-fns'
-import { Calendar as CalendarIcon, Clock, User } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, User, Heart, FileText, ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
@@ -36,67 +37,41 @@ export default function BookAppointmentPage() {
     reason: '',
   })
 
-  // Fetch available doctors
   useEffect(() => {
     const fetchDoctors = async () => {
       const { data, error } = await supabase
         .from('user_profiles')
         .select('id, first_name, last_name, specialization')
         .eq('user_type', 'doctor')
-
-      if (error) {
-        console.error('Error fetching doctors:', error)
-        toast.error('Failed to load doctors')
-      } else {
-        setDoctors(data || [])
-      }
+      if (error) { console.error('Error fetching doctors:', error); toast.error('Failed to load doctors') }
+      else { setDoctors(data || []) }
     }
-
     fetchDoctors()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!formData.doctor_id || !formData.appointment_time || !formData.reason) {
-      toast.error('Please fill all required fields')
-      return
+      toast.error('Please fill all required fields'); return
     }
-
     setIsSubmitting(true)
-
     try {
       const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        toast.error('Please log in first')
-        return
-      }
-
+      if (!user) { toast.error('Please log in first'); return }
       const selectedDoctor = doctors.find(d => d.id === formData.doctor_id)
-
-      const { error } = await supabase
-        .from('appointments')
-        .insert({
-          patient_id: user.id,
-          doctor_id: formData.doctor_id,
-          doctor_name: selectedDoctor?.full_name || '',
-          specialization: selectedDoctor?.specialization || '',
-          appointment_date: format(formData.appointment_date, 'yyyy-MM-dd'),
-          appointment_time: formData.appointment_time,
-          reason: formData.reason,
-          status: 'scheduled',
-        })
-
+      const { error } = await supabase.from('appointments').insert({
+        patient_id: user.id,
+        doctor_id: formData.doctor_id,
+        doctor_name: selectedDoctor?.full_name || '',
+        specialization: selectedDoctor?.specialization || '',
+        appointment_date: format(formData.appointment_date, 'yyyy-MM-dd'),
+        appointment_time: formData.appointment_time,
+        reason: formData.reason,
+        status: 'scheduled',
+      })
       if (error) throw error
-
       toast.success('Appointment booked successfully!')
-      
-      // Redirect to appointments page
-      setTimeout(() => {
-        router.push('/patient/appointments')
-      }, 1500)
-
+      setTimeout(() => { router.push('/patient/appointments') }, 1500)
     } catch (err: any) {
       console.error(err)
       toast.error(err.message || 'Failed to book appointment')
@@ -106,23 +81,42 @@ export default function BookAppointmentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/5 py-12">
-      <div className="max-w-2xl mx-auto px-4">
-        <Card>
-          <CardHeader>
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-accent/5 pb-20 md:pb-12">
+
+      {/* ── MOBILE HEADER (hidden on desktop) ── */}
+      <div className="md:hidden bg-primary px-4 pt-12 pb-5 relative overflow-hidden">
+        <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white/5 pointer-events-none" />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="bg-white/15 text-white rounded-xl p-2 flex-shrink-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div>
+            <h1 className="text-xl font-bold text-white">Book Appointment</h1>
+            <p className="text-white/50 text-xs mt-0.5">Schedule with a qualified doctor</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── DESKTOP WRAPPER ── */}
+      <div className="max-w-2xl mx-auto px-4 py-4 md:py-12">
+        <Card className="border-0 shadow-none md:border md:shadow-sm">
+          {/* Desktop CardHeader only */}
+          <CardHeader className="hidden md:block">
             <CardTitle className="text-3xl">Book Appointment</CardTitle>
-            <CardDescription>
-              Schedule a consultation with a qualified doctor
-            </CardDescription>
+            <CardDescription>Schedule a consultation with a qualified doctor</CardDescription>
           </CardHeader>
 
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Doctor Selection */}
-              <div className="space-y-2">
-                <Label>Select Doctor</Label>
+          <CardContent className="pt-4 md:pt-0 px-0 md:px-6 md:pb-6">
+            <form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
+
+              {/* ── Doctor Selection ── */}
+              <div className="space-y-1.5 md:space-y-2">
+                <Label className="text-[13px] md:text-sm font-semibold">Select Doctor</Label>
                 <Select onValueChange={(value) => setFormData({ ...formData, doctor_id: value })}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11 md:h-10 rounded-xl md:rounded-md text-sm">
                     <SelectValue placeholder="Choose a doctor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -135,13 +129,16 @@ export default function BookAppointmentPage() {
                 </Select>
               </div>
 
-              {/* Date Picker */}
-              <div className="space-y-2">
-                <Label>Appointment Date</Label>
+              {/* ── Date Picker ── */}
+              <div className="space-y-1.5 md:space-y-2">
+                <Label className="text-[13px] md:text-sm font-semibold">Appointment Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal h-11 md:h-10 rounded-xl md:rounded-md text-sm"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                       {format(formData.appointment_date, 'PPP')}
                     </Button>
                   </PopoverTrigger>
@@ -156,11 +153,11 @@ export default function BookAppointmentPage() {
                 </Popover>
               </div>
 
-              {/* Time Selection */}
-              <div className="space-y-2">
-                <Label>Appointment Time</Label>
+              {/* ── Time Selection ── */}
+              <div className="space-y-1.5 md:space-y-2">
+                <Label className="text-[13px] md:text-sm font-semibold">Appointment Time</Label>
                 <Select onValueChange={(value) => setFormData({ ...formData, appointment_time: value })}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11 md:h-10 rounded-xl md:rounded-md text-sm">
                     <SelectValue placeholder="Select time" />
                   </SelectTrigger>
                   <SelectContent>
@@ -176,20 +173,42 @@ export default function BookAppointmentPage() {
                 </Select>
               </div>
 
-              {/* Reason */}
-              <div className="space-y-2">
-                <Label>Reason for Visit</Label>
+              {/* ── Reason ── */}
+              <div className="space-y-1.5 md:space-y-2">
+                <Label className="text-[13px] md:text-sm font-semibold">Reason for Visit</Label>
                 <Textarea
                   placeholder="Briefly describe your symptoms or reason for consultation..."
                   value={formData.reason}
                   onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                   rows={4}
+                  className="rounded-xl md:rounded-md text-sm resize-none"
                 />
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full" 
+              {/* ── Summary chip (mobile only) ── */}
+              {formData.doctor_id && formData.appointment_time && (
+                <div className="md:hidden bg-primary/5 border border-primary/20 rounded-2xl p-3.5">
+                  <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-2">Booking Summary</p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-[12px] text-foreground">
+                      <User className="w-3.5 h-3.5 text-muted-foreground" />
+                      Dr. {doctors.find(d => d.id === formData.doctor_id)?.full_name || '—'}
+                    </div>
+                    <div className="flex items-center gap-2 text-[12px] text-foreground">
+                      <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                      {format(formData.appointment_date, 'MMM dd, yyyy')}
+                    </div>
+                    <div className="flex items-center gap-2 text-[12px] text-foreground">
+                      <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                      {formData.appointment_time}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full h-12 md:h-11 rounded-2xl md:rounded-md text-sm font-semibold"
                 size="lg"
                 disabled={isSubmitting}
               >
@@ -199,6 +218,26 @@ export default function BookAppointmentPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── MOBILE BOTTOM NAV ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border flex z-50">
+        <Link href="/patient/dashboard" className="flex-1 flex flex-col items-center gap-0.5 py-2.5 px-1">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span className="text-[10px] text-muted-foreground">Dashboard</span>
+        </Link>
+        <Link href="/patient/health-metrics" className="flex-1 flex flex-col items-center gap-0.5 py-2.5 px-1">
+          <Heart className="h-5 w-5 text-muted-foreground" />
+          <span className="text-[10px] text-muted-foreground">Metrics</span>
+        </Link>
+        <Link href="/patient/appointments" className="flex-1 flex flex-col items-center gap-0.5 py-2.5 px-1">
+          <CalendarIcon className="h-5 w-5 text-primary" />
+          <span className="text-[10px] font-semibold text-primary">Appointments</span>
+        </Link>
+        <Link href="/patient/medical-records" className="flex-1 flex flex-col items-center gap-0.5 py-2.5 px-1">
+          <FileText className="h-5 w-5 text-muted-foreground" />
+          <span className="text-[10px] text-muted-foreground">Records</span>
+        </Link>
+      </nav>
     </div>
   )
 }
