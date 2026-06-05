@@ -10,6 +10,9 @@ const nextConfig = {
     unoptimized: true,
   },
 
+  // Fix Turbopack warning + Worker Error
+  turbopack: {},
+
   async headers() {
     return [
       {
