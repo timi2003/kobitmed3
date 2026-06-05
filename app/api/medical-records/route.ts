@@ -18,16 +18,15 @@ export async function GET(request: NextRequest) {
     let query = client.from('medical_records').select('*')
 
     if (userType === 'patient') {
-      // Patients can see their own records and records added by their doctors
       query = query.eq('patient_id', userId)
     } else if (userType === 'doctor') {
-      // Doctors can see records they added to their patients
       query = query.eq('doctor_id', userId)
     }
 
     const { data, error } = await query
 
     if (error) {
+      console.error('Database error:', error)
       return NextResponse.json(
         { error: 'Failed to fetch medical records' },
         { status: 500 }
@@ -76,7 +75,7 @@ export async function POST(request: NextRequest) {
         record_type: recordType || 'note',
         record_date: recordDate || new Date().toISOString().split('T')[0],
         file_url: fileUrl || null,
-      })
+      } as any)           // ← Fixed the type error
       .select()
       .single()
 
