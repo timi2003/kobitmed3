@@ -1,4 +1,5 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -8,13 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
-// Force dynamic rendering to fix prerender error
+// Force dynamic rendering + disable static optimization
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
- 
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -23,7 +25,7 @@ export default function LoginPage() {
 
   const redirectTo = searchParams.get('redirectTo') || '/patient/dashboard'
 
-  // Clear any stale error when URL changes
+  // Clear error when URL changes
   useEffect(() => {
     setError('')
   }, [searchParams])
@@ -35,7 +37,8 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
-      
+
+      // Optional: Clear any existing session first
       await supabase.auth.signOut({ scope: 'local' })
 
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -46,11 +49,12 @@ export default function LoginPage() {
       if (signInError) throw new Error(signInError.message)
       if (!data.user) throw new Error('Login failed')
 
+      // Redirect with refresh
       const finalUrl = redirectTo.includes('?') 
         ? `${redirectTo}&refreshed=true` 
         : `${redirectTo}?refreshed=true`
 
-      router.replace(finalUrl)
+      router.push(finalUrl)
       router.refresh()
 
     } catch (err: any) {
@@ -78,7 +82,12 @@ export default function LoginPage() {
 
             <div className="space-y-1">
               <label className="text-sm font-medium">Email Address</label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input 
+                type="email" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                required 
+              />
             </div>
 
             <div className="space-y-1">
@@ -93,7 +102,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -113,7 +122,9 @@ export default function LoginPage() {
 
             <p className="text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
-              <Link href="/auth/signup" className="text-primary hover:underline">Create one</Link>
+              <Link href="/auth/signup" className="text-primary hover:underline">
+                Create one
+              </Link>
             </p>
             <p className="text-center text-sm text-muted-foreground">
               Go back to home{' '}
