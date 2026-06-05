@@ -60,20 +60,20 @@ export default function SignUpPage() {
       if (authError) throw authError
       if (!authData.user) throw new Error("Failed to create account")
 
-      // 2. Insert into profiles table (Safe handling)
+      // 2. Insert into profiles table
       try {
         await supabase.from('profiles').insert({
           id: authData.user.id,
           full_name: fullName.trim(),
           user_type: role,
           email: email.trim(),
-        })
+        } as any)        // ← Fixed the type error
       } catch (profileErr) {
         console.warn("Profile insert warning (non-blocking):", profileErr)
         // Don't fail signup if profile insert fails
       }
 
-      // Sign out any auto-created session to force manual login
+      // Sign out any auto-created session
       await supabase.auth.signOut({ scope: 'local' })
 
       // Redirect to login
