@@ -101,25 +101,25 @@ export async function getUserProfile(userId: string) {
 
 // ======================
 
-export async function updateUserProfile(userId: string, updates: string ) {
-  const client = await createClient();
+// export async function updateUserProfile(userId: string, updates: any) {
+//   const client = await createClient();
 
-  // === Strongest possible fix for update error ===
-  const result = await client
-    .from('user_profiles')
-    .update(updates)
-    .eq('user_id', userId)
-    .select()
-    .single();
+//   // === Strongest possible fix for update error ===
+//   const result = await client
+//     .from('user_profiles')
+//     .update(updates)
+//     .eq('user_id', userId)
+//     .select()
+//     .single();
 
-  const { data: profile, error } = result as any;
+//   const { data: profile, error } = result as any;
 
-  if (error || !profile) {
-    throw new Error(`Failed to update user profile: ${error?.message || 'Not found'}`);
-  }
+//   if (error || !profile) {
+//     throw new Error(`Failed to update user profile: ${error?.message || 'Not found'}`);
+//   }
 
-  return profile;
-}
+//   return profile;
+// }
 
 // ======================
 
